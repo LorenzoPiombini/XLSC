@@ -18,8 +18,15 @@ int main()
 	printf("found %ld strings\n",a.count);
 
 
+	struct Format *f = NULL;
+	struct Xf *xfs = NULL;
+	if(get_formats_number("../d.test/xl_styles.xml",&f,&xfs) == -1) goto clean;
+
+
 clean:
 
+	if(f) free(f);
+	if(xfs) free(xfs);
 	if(a.s){
 		for(long i = 0; i < (long)a.count; i++)
 			if(a.s[i]) free(a.s[i]);
