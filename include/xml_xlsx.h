@@ -3,11 +3,6 @@
 
 #include <stdint.h>
 
-struct shared_string{
-	char **s;
-	size_t count;
-};
-
 enum Cell_type{
 	CELL_EMPTY,
 	CELL_NUM,
@@ -45,20 +40,25 @@ enum Format_type{
 
 
 struct Format{
-	char format_code[250];
 	int type;
+	char *format_code;
+	uint8_t is_date;
 };
 
-extern struct Format built_in_formats[164];
 
 /*to be expanded*/
 struct Xf{
 	int num_fmt_id;
+	int is_date;
 	int font_id;
 	int fill_id;
 	int border_id;
 };
 
+struct shared_string{
+	char **s;
+	size_t count;
+};
 struct Cell{
 	int type;
 	union{

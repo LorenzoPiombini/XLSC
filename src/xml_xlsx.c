@@ -5,10 +5,53 @@
 #include "xml_xlsx.h"
 #include "os_operations.h"
 
-struct Format built_in_formats[164] = {0};
+static const struct Format built_in_formats[] = {
+    { 0, "General",		0},
+    { 1, "0",			0},
+    { 2, "0.00",		0},
+    { 3, "#,##0",		0},
+    { 4, "#,##0.00",	0},
+    { 9, "0%",			0},
+    {10, "0.00%",		0},
+    {11, "0.00E+00",	0},
+    {12, "# ?/?",		0},
+    {13, "# ?\?/??",		0},
+    {14, "mm-dd-yy",	1},
+    {15, "d-mmm-yy",	1},
+    {16, "d-mmm",		1},
+    {17, "mmm-yy",		1},
+    {18, "h:mm AM/PM",	1},
+    {19, "h:mm:ss AM/PM",1},
+    {20, "h:mm",		1},
+    {21, "h:mm:ss",		1},
+    {22, "m/d/yy h:mm",	1},
+    {37, "#,##0 ;(#,##0)",0},
+    {38, "#,##0 ;[Red](#,##0)",0},
+    {39, "#,##0.00;(#,##0.00)", 0},
+    {40, "#,##0.00;[Red](#,##0.00)",0},
+    {45, "mm:ss",		1},
+    {46, "[h]:mm:ss",	1},
+    {47, "mmss.0",		1},
+    {48, "##0.0E+0",	0},
+    {49, "@",			0}
+};
 
-static void init_built_in_formats(struct Format *f);
+#define BUILT_IN_FORMAT_SIZE (sizeof(built_in_formats) / sizeof(struct Format))
+
+static const struct Format *get_built_in_formats(int id);
 static char *strstrnnt(const char *str, const char *find, size_t size, size_t *cursor);
+static int is_number_date(int id, struct Format *f);
+
+
+static int is_number_date(int id, struct Format *f)
+{
+	if(id >=164){
+		
+	}
+
+	const struct Format  *b = get_built_in_formats(id);
+	return b ? b->is_date : 0;
+}
 
 static char *strstrnnt(const char *str, const char *find, size_t size, size_t *cursor)
 {
@@ -19,37 +62,12 @@ static char *strstrnnt(const char *str, const char *find, size_t size, size_t *c
 	return NULL;
 }
 
-static void init_built_in_formats(struct Format *f)
+static const struct Format *get_built_in_formats(int id)
 {
-	for(int i = 0; i < 50; i++){
-		switch(i){
-		case FNUM_GENERAL:
-		case FNUM_INT:
-		case FNUM_FLOAT:
-		case FNUM_INT_SEP:
-		case FNUM_FLOAT_SEP:
-		case FNUM_INT_PERC:
-		case FNUM_FLOAT_PERC:
-		case FNUM_SCIENTIFIC:
-		case FNUM_FRACTION:
-		case FNUM_FRACTION_2:
-		case FNUM_DATE_MM_DD_YY:
-		case FNUM_DATE_D_MMM_YY:
-		case FNUM_DATE_D_MMM:
-		case FNUM_DATE_MMM_YY:
-		case FNUM_INT_PAREN:
-		case FNUM_INT_PAREN_RED:
-		case FNUM_FLOAT_PAREN:
-		case FNUM_FLOAT_PAREN_RED:
-		case FNUM_TIME_MS:
-		case FNUM_TIME_ELAPSED:
-		case FNUM_TIME_MSS:
-		case FNUM_TEXT:
-			f->type = i;
-		default:
-			continue;
-		}
+	for(size_t i = 0; i < BUILT_IN_FORMAT_SIZE; i++){
+		if(built_in_formats[i].type == id) return &built_in_formats[i];
 	}
+	return NULL;
 }
 
 int get_shared_strings(char *file_path,struct shared_string *shs)
@@ -62,7 +80,7 @@ int get_shared_strings(char *file_path,struct shared_string *shs)
 	char **shared_string = NULL;
 	
 	size_t cursor = 0;
-	char *count = strstrnnt(file_content,"uniqueCount",size,&cursor);
+	char *count = strstrnnt((const char*)file_content,"uniqueCount",size,&cursor);
 	if(!count) goto failed;
 
 	while((count - (char*)file_content) < size && *count != '"') count++;
@@ -82,7 +100,7 @@ int get_shared_strings(char *file_path,struct shared_string *shs)
 
 	char *t = NULL;
 	int c = 0;
-	while((t = strstrnnt((char*)file_content,"<t",size,&cursor))){
+	while((t = strstrnnt((const char*)file_content,"<t",size,&cursor))){
 		*t = '@';
 		while(*t && *t != '>') t++;
 		t++;/*skip >*/
@@ -93,7 +111,6 @@ int get_shared_strings(char *file_path,struct shared_string *shs)
 
 		int size_st = end-t;
 
-		char st[size_st+1];
 		shared_string[c] = malloc(size_st+1);  
 		if(!shared_string[c]) goto failed;
 		memset(shared_string[c],0,size_st+1);
@@ -122,6 +139,7 @@ int get_sheet_cell(char *file_path,struct Cell *c)
 {
 	
 
+	return 0;
 }
 
 int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
@@ -130,12 +148,11 @@ int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
 	long long size = read_file(file_path,&file_content);
 	if(size == -1) return -1;
 
-	init_built_in_formats(built_in_formats);
 	/*get count of custom number format*/
 
 	char digits[11] = {0};
 	size_t cursor = 0;
-	char *num_fmts = strstrnnt(file_content,"<numFmts count=",size,&cursor);
+	char *num_fmts = strstrnnt((const char *)file_content,"<numFmts count=",size,&cursor);
 	if(!num_fmts) goto get_xfs; /*NO special format */
 
 	while(*num_fmts != '"') num_fmts++;
@@ -157,7 +174,7 @@ int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
 
 	/*get the index and format code*/
 	while(format_number_count > 0){
-		num_fmts = strstrnnt(file_content,"<numFmt ",size,&cursor);
+		num_fmts = strstrnnt((const char *)file_content,"<numFmt ",size,&cursor);
 		if(!num_fmts) goto failed;
 		*num_fmts= '\0';
 
@@ -177,7 +194,7 @@ int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
 
 		(*format)->type = (int)number;
 
-		num_fmts = strstrnnt(file_content,"formatCode",size,&cursor);
+		num_fmts = strstrnnt((const char*)file_content,"formatCode",size,&cursor);
 		if(!num_fmts) goto failed;
 
 		*num_fmts= '\0';
@@ -192,11 +209,11 @@ int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
 
 get_xfs:
 
-	char *cell_xfs = strstrnnt(file_content,"<cellXfs ",size,&cursor);
+	char *cell_xfs = strstrnnt((const char*)file_content,"<cellXfs ",size,&cursor);
 	if(!cell_xfs) goto failed;
 	*cell_xfs= '\0';
 
-	char *c =  strstrnnt(file_content,"count",size,&cursor);
+	char *c =  strstrnnt((const char*)file_content,"count",size,&cursor);
 	while(*c != '"') c++;
 	c++;
 
@@ -216,13 +233,13 @@ get_xfs:
 	char *xf = NULL;
 	int j = 0;
 	memset(*xfs,0,sizeof **xfs * xfs_record_n);
-	while((xf = strstrnnt((char*)file_content,"<xf",size,&cursor))){
+	while((xf = strstrnnt((const char*)file_content,"<xf",size,&cursor))){
 		*xf = '\0';
-		char *n_fmt_id = strstrnnt((char*)file_content,"numFmtId",size,&cursor);
+		char *n_fmt_id = strstrnnt((const char*)file_content,"numFmtId",size,&cursor);
 		if(!n_fmt_id) goto failed;
 
 		while(*n_fmt_id != '"') n_fmt_id++;
-		*n_fmt_id++;
+		n_fmt_id++;
 		char *end_n_fmt_id = n_fmt_id;
 		while(*end_n_fmt_id != '"') end_n_fmt_id++;
 		int n_d = (end_n_fmt_id - (char*)file_content) - (n_fmt_id - (char *) file_content);
@@ -233,6 +250,8 @@ get_xfs:
 			errno = 0;
 			((struct Xf *)(*xfs) + j++)->num_fmt_id = (int) strtol(digits,NULL,10);
 			if (errno == EINVAL || errno == ERANGE) goto failed;
+
+			
 		}
 		
 	}
