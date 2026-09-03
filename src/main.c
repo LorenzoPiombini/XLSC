@@ -13,25 +13,25 @@ int main()
 	if(get_shared_strings("../d.test/xl_sharedStrings.xml",&a) == -1) goto clean;
 
 	for(long i = 0; i < (long)a.count; i++)
-		printf("%s\n",a.s[i]);
+		printf("[%s]\n",&a.s[a.index[i]]);
 
 	printf("found %ld strings\n",a.count);
 
 
-	struct Format *f = NULL;
-	struct Xf *xfs = NULL;
-	if(get_formats_number("../d.test/xl_styles.xml",&f,&xfs) == -1) goto clean;
+	struct Formats fn = {0};
+	struct Xfs xfs = {0};
+	if(get_formats_number("../d.test/xl_styles.xml",&fn,&xfs) == -1) goto clean;
 
-
+	for(int i = 0; i < xfs.count; i++){
+		printf("numFmtId=%d, is_date? %s.\n",xfs.xfs[i].num_fmt_id,xfs.xfs[i].is_date ? "yes":"no");
+	}
+	printf("found %d xf records\n",xfs.count);
 clean:
 
-	if(f) free(f);
-	if(xfs) free(xfs);
-	if(a.s){
-		for(long i = 0; i < (long)a.count; i++)
-			if(a.s[i]) free(a.s[i]);
-		free(a.s);
-	}
+	if(fn.f) free(fn.f);
+	if(xfs.xfs) free(xfs.xfs);
+	if(a.s) free(a.s);
+	if(a.index) free(a.index);
 	return -1;
 
 }

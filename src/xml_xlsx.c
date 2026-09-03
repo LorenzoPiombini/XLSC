@@ -40,15 +40,48 @@ static const struct Format built_in_formats[] = {
 
 static const struct Format *get_built_in_formats(int id);
 static char *strstrnnt(const char *str, const char *find, size_t size, size_t *cursor);
-static int is_number_date(int id, struct Format *f);
+static int is_number_date(int id);
+static int is_date_char_present(char *code);
+static void decode_excel_entities(char *s);
 
 
-static int is_number_date(int id, struct Format *f)
+static void decode_excel_entities(char *s)
 {
-	if(id >=164){
-		
-	}
+	char *w = s, *r = s;
+	while(*r){
+		if(*r != '&'){
+			*w++ = *r++;
+			continue;
+		}
 
+		if(strncmp(r,"&amp;",5) == 0){
+			*w++ = '&';
+			r += 5;
+		}
+	}
+}
+
+static int is_date_char_present(char *code)
+{
+	char *p = code;
+	for(; *p;p++){
+		switch(*p){
+		case 'y':
+		case 'Y':
+		case 'd':
+		case 'D':
+		case 'm':
+		case 'M':
+			return 1;
+		default:
+			break;
+		}
+	}
+	return 0;
+}
+
+static int is_number_date(int id)
+{
 	const struct Format  *b = get_built_in_formats(id);
 	return b ? b->is_date : 0;
 }
@@ -77,7 +110,7 @@ int get_shared_strings(char *file_path,struct shared_string *shs)
 	if(size == -1) return -1;
 
 	char digits[11] = {0};
-	char **shared_string = NULL;
+	char *shared_string = NULL;
 	
 	size_t cursor = 0;
 	char *count = strstrnnt((const char*)file_content,"uniqueCount",size,&cursor);
@@ -94,55 +127,64 @@ int get_shared_strings(char *file_path,struct shared_string *shs)
 	long strings_count = strtol(digits,NULL,10);
 	if (errno == EINVAL || errno == ERANGE) goto failed;
 	
-	shared_string = malloc(strings_count * sizeof *shared_string);
+	shared_string = malloc(10240);
 	if(!shared_string) goto failed;
-	memset(shared_string,0,sizeof *shared_string * strings_count);
+	memset(shared_string,0,10240);
 
-	char *t = NULL;
-	int c = 0;
-	while((t = strstrnnt((const char*)file_content,"<t",size,&cursor))){
-		*t = '@';
-		while(*t && *t != '>') t++;
-		t++;/*skip >*/
-		size_t sz = size - (t - (char*)file_content);
-		size_t nest_curs = 0;
-		char *end = strstrnnt(t,"</",sz,&nest_curs);
-		if(!end) goto failed;
+	int *offset = malloc(strings_count * sizeof *offset);
+	if(!offset)  goto failed;
+	memset(offset,0,sizeof *offset * strings_count);
 
-		int size_st = end-t;
+	char *si = NULL;
+	int w = 0, scount = 0;
+	while(scount < strings_count && 
+			(si = strstrnnt((const char*)file_content,"<si>",size,&cursor))){
+		*si = '\0';
 
-		shared_string[c] = malloc(size_st+1);  
-		if(!shared_string[c]) goto failed;
-		memset(shared_string[c],0,size_st+1);
+		size_t cur = cursor;
+		char *si_close = strstrnnt((const char*)file_content,"</si>",size,&cursor);
+		if(!si_close) goto failed;
+		*si_close = '\0';
 
-		strncpy(shared_string[c],t,size_st);
-		c++;
+		offset[scount] = w;
+		char *t = NULL;
+		while((t = strstrnnt((const char*)file_content,"<t",size,&cur))){
+			if(cur > cursor) break;
+			*t = '\0';
+			while(*t != '>') t++;
+			t++;
+			while(*t != '<') {
+				shared_string[w++] = *t++;
+			}
+		}
+
+
+		w++;
+		decode_excel_entities(&shared_string[offset[scount]]);
+		scount++;
 	}
 
 	shs->s = shared_string;
-	shs->count = c;
+	shs->index = offset;
+	shs->count = scount;
 
 	free(file_content);
 	return 0;
 
 failed:
-	if(file_content) free(file_content);
-	if(shared_string){
-		for(long i = 0; i < (long)strings_count; i++)
-			if(shared_string[i]) free(shared_string[i]);
-		free(shared_string);
-	}
+	if(file_content) 	free(file_content);
+	if(shared_string) 	free(shared_string);
+	if(offset) 			free(offset);
 	return -1;
 }
 
 int get_sheet_cell(char *file_path,struct Cell *c)
 {
 	
-
 	return 0;
 }
 
-int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
+int get_formats_number(char *file_path,struct Formats *fn, struct Xfs *xfs)
 {
 	uint8_t *file_content = NULL; 
 	long long size = read_file(file_path,&file_content);
@@ -167,13 +209,14 @@ int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
 	long format_number_count = strtol(digits,NULL,10);
 	if (errno == EINVAL || errno == ERANGE) goto failed;
 
-	*format = malloc(sizeof **format * format_number_count);
-	if(!*format)goto failed;
+	fn->f = malloc(sizeof *fn->f * format_number_count);
+	if(!fn->f)goto failed;
 
-	memset(*format,0,sizeof **format * format_number_count);
+	memset(fn->f,0,sizeof *fn->f * format_number_count);
 
+	fn->count = format_number_count;
 	/*get the index and format code*/
-	while(format_number_count > 0){
+	for(int i = 0; i < format_number_count; i++){
 		num_fmts = strstrnnt((const char *)file_content,"<numFmt ",size,&cursor);
 		if(!num_fmts) goto failed;
 		*num_fmts= '\0';
@@ -192,8 +235,8 @@ int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
 		long number = strtol(digits,NULL,10);
 		if (errno == EINVAL || errno == ERANGE) goto failed;
 
-		(*format)->type = (int)number;
-
+		fn->f[i].type = (int)number;
+	
 		num_fmts = strstrnnt((const char*)file_content,"formatCode",size,&cursor);
 		if(!num_fmts) goto failed;
 
@@ -201,10 +244,9 @@ int get_formats_number(char *file_path,struct Format **format, struct Xf **xfs)
 
 		while(*num_fmts != '"') num_fmts++;
 		num_fmts++;
-		int i = 0;
-		while(*num_fmts != '"') (*format)->format_code[i++] = *num_fmts++;
-
-		format_number_count--;
+		int j = 0;
+		while(*num_fmts != '"') fn->f[i].format_code[j++] = *num_fmts++;
+		if(number >=164) fn->f[i].is_date = is_date_char_present(fn->f[i].format_code);
 	}
 
 get_xfs:
@@ -227,12 +269,13 @@ get_xfs:
 	long xfs_record_n = strtol(digits,NULL,10);
 	if (errno == EINVAL || errno == ERANGE) goto failed;
 
-	*xfs = malloc(sizeof **xfs * xfs_record_n);
-	if(!*xfs) goto failed; 
+	xfs->xfs = malloc(sizeof *(xfs->xfs) * xfs_record_n);
+	if(!xfs->xfs) goto failed; 
 
 	char *xf = NULL;
 	int j = 0;
-	memset(*xfs,0,sizeof **xfs * xfs_record_n);
+	memset(xfs->xfs,0,sizeof *(xfs->xfs) * xfs_record_n);
+	xfs->count = xfs_record_n;
 	while((xf = strstrnnt((const char*)file_content,"<xf",size,&cursor))){
 		*xf = '\0';
 		char *n_fmt_id = strstrnnt((const char*)file_content,"numFmtId",size,&cursor);
@@ -248,12 +291,21 @@ get_xfs:
 
 		if(j < xfs_record_n){
 			errno = 0;
-			((struct Xf *)(*xfs) + j++)->num_fmt_id = (int) strtol(digits,NULL,10);
+			((xfs->xfs) + j)->num_fmt_id = (int) strtol(digits,NULL,10);
 			if (errno == EINVAL || errno == ERANGE) goto failed;
 
-			
+			if((xfs->xfs + j)->num_fmt_id >= 164){
+				for(int k = 0; k < fn->count; k++){
+					if((xfs->xfs + j)->num_fmt_id != fn->f[k].type) continue;
+
+					(xfs->xfs + j)->is_date = fn->f[k].is_date; 
+				}
+			}else{
+					(xfs->xfs + j)->is_date = is_number_date((xfs->xfs + j)->num_fmt_id); 
+
+			}
+			j++;
 		}
-		
 	}
 
 
@@ -261,13 +313,8 @@ get_xfs:
 	return 0;
 
 failed:
-	if(format){
-		if(*format) free(*format);
-	}
-
-	if(xfs){
-		if(*xfs) free(*xfs);
-	}
+	if(fn->f) free(fn->f);
+	if(xfs) if(xfs->xfs) free(xfs->xfs);
 	free(file_content);
 	return -1;
 }
