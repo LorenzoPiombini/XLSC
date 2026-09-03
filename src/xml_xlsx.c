@@ -43,6 +43,17 @@ static char *strstrnnt(const char *str, const char *find, size_t size, size_t *c
 static int is_number_date(int id);
 static int is_date_char_present(char *code);
 static void decode_excel_entities(char *s);
+static long convert_excel_time_to_c_system(int nday);
+
+
+static long convert_excel_time_to_c_system(int nday)
+{
+	uint32_t seconds = 60*60*24;
+	long long _70_years_days = (365 * 70) + (70/4) + 1 ;
+	long long n = 46253 - _70_years_days ;	
+	
+	return  n * seconds;
+}
 
 
 static void decode_excel_entities(char *s)
@@ -127,9 +138,9 @@ int get_shared_strings(char *file_path,struct shared_string *shs)
 	long strings_count = strtol(digits,NULL,10);
 	if (errno == EINVAL || errno == ERANGE) goto failed;
 	
-	shared_string = malloc(10240);
+	shared_string = malloc(size);
 	if(!shared_string) goto failed;
-	memset(shared_string,0,10240);
+	memset(shared_string,0,size);
 
 	int *offset = malloc(strings_count * sizeof *offset);
 	if(!offset)  goto failed;
