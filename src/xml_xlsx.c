@@ -192,6 +192,42 @@ failed:
 int get_sheet_cell(char *file_path,struct Cell *c)
 {
 	
+	uint8_t *file_content = NULL; 
+	long long size = read_file(file_path,&file_content);
+	if(size == -1) return -1;
+	
+	char digits[11] = {0};
+	size_t cursor = 0;
+	char *row = NULL;
+
+	while((row = strstrnnt((const char*)file_content,"<row ",size,&cursor))){
+		*row = '\0';
+		size_t cur = cursor;
+		char *cell = NULL;
+		while((cell = strstrnnt((const char*)file_content,"<c ",size,&cur))){
+			*cell = '\0';
+			int j = 0;
+			char *p = cell;
+			while(*p != '>') p++; 
+			int sz = p - cell;
+			char buf[sz+1];
+			memset(buf,0,sz+1);
+			cell++;
+			memcpy(buf,cell,sz);
+			char *t = strstrnnt((const char*)cell,"t=",sz);
+			if(t){
+					
+
+			}
+
+
+
+
+		}	
+
+
+	}
+
 	return 0;
 }
 
