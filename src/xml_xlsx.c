@@ -50,7 +50,7 @@ static long convert_excel_time_to_c_system(int nday)
 {
 	uint32_t seconds = 60*60*24;
 	long long _70_years_days = (365 * 70) + (70/4) + 1 ;
-	long long n = 46253 - _70_years_days ;	
+	long long n = nday - _70_years_days ;	
 	
 	return  n * seconds;
 }
@@ -100,9 +100,18 @@ static int is_number_date(int id)
 static char *strstrnnt(const char *str, const char *find, size_t size, size_t *cursor)
 {
 	int len = strlen(find);
-	for(size_t i = (*cursor == 0) ? 0 : *cursor; i + len <= size;i++)
-		if(memcmp(str + i,find,len) == 0) {*cursor = i; return (char *)(str + i);}
-
+	size_t i = 0;
+	if(cursor){
+		i = (*cursor == 0) ? 0 : *cursor; 
+	}
+	for(; i + len <= size;i++){
+		if(memcmp(str + i,find,len) == 0){
+			if(cursor){
+				*cursor = i; 
+			}
+			return (char *)(str + i);
+		}
+	}	
 	return NULL;
 }
 
@@ -189,9 +198,8 @@ failed:
 	return -1;
 }
 
-int get_sheet_cell(char *file_path,struct Cell *c)
+int get_sheet_cell(char *file_path,struct Cells *cells,struct Xfs *styles)
 {
-	
 	uint8_t *file_content = NULL; 
 	long long size = read_file(file_path,&file_content);
 	if(size == -1) return -1;
@@ -200,13 +208,18 @@ int get_sheet_cell(char *file_path,struct Cell *c)
 	size_t cursor = 0;
 	char *row = NULL;
 
+	cells->c = malloc(12*47*sizeof *cells->c);
+	if(!cells->c) goto failed;
+	memset(cells->c,0,12*47*sizeof *cells->c);
+
 	while((row = strstrnnt((const char*)file_content,"<row ",size,&cursor))){
 		*row = '\0';
 		size_t cur = cursor;
 		char *cell = NULL;
+		
 		while((cell = strstrnnt((const char*)file_content,"<c ",size,&cur))){
 			*cell = '\0';
-			int j = 0;
+
 			char *p = cell;
 			while(*p != '>') p++; 
 			int sz = p - cell;
@@ -214,21 +227,97 @@ int get_sheet_cell(char *file_path,struct Cell *c)
 			memset(buf,0,sz+1);
 			cell++;
 			memcpy(buf,cell,sz);
-			char *t = strstrnnt((const char*)cell,"t=",sz);
-			if(t){
-					
-
+			/*get the reference 'the name of the cell' i.e. A1 B1*/
+			char *r =strstrnnt((const char*)buf,"r=",sz,NULL); 
+			if(r){
+				*r = '\0';
+				r += 3;
+				for(int i = 0; *r != '"'; (cells->c + cells->count)->ref[i++]= *r++);
 			}
 
+			/*get the style of the data in the cell
+			 * IMPORTANT FOR DATES*/
+			char *s = strstrnnt((const char*)buf,"s=",sz,NULL);
+			if(s){
+				*s = '\0';
+				s += 3;
+				int k = 0;
+				char *p = s;
+				for(k = 0; *p != '"'; k++,p++);
 
+				memset(digits,0,11);
+				strncpy(digits,s,k);
 
+				errno = 0;
+				int index = (int)strtol(digits,NULL,10);
+				if (errno == EINVAL || errno == ERANGE) goto failed;
 
+				if(index >= styles->count) goto failed; 
+
+				struct Xf style = styles->xfs[index];
+				if(style.is_date){
+					char *v = strstrnnt((const char*)file_content,"<v>",size,&cur);
+					if(v){
+						*v = '\0';
+						v += 3;
+						int k = 0;
+						char *p = v;
+						for(k = 0; *p != '<'; k++,p++);
+						memset(digits,0,11);
+						strncpy(digits,v,k);
+						
+						errno = 0;
+						int date = (int)strtol(digits,NULL,10);
+						if (errno == EINVAL || errno == ERANGE) goto failed;
+
+						(cells->c + cells->count)->value.date = convert_excel_time_to_c_system(date);
+						(cells->c + cells->count)->type = CELL_DATE;
+						cells->count++;
+						continue;
+					}
+				}
+			}
+			/*get the type of the data in the cell*/
+			char *t = strstrnnt((const char*)buf,"t=",sz, NULL);
+			if(t){
+				*t = '\0';
+				t += 3;
+				switch(*t){
+				case 's':
+				{
+					char *v = strstrnnt((const char*)file_content,"<v>",size,&cur);
+					if(v){
+						*v = '\0';
+						v += 3;
+						int k = 0;
+						char *p = v;
+						for(k = 0; *p != '<'; k++,p++);
+						memset(digits,0,11);
+						strncpy(digits,v,k);
+						
+						errno = 0;
+						(cells->c + cells->count)->value.index_sh_str = (int)strtol(digits,NULL,10);
+						if (errno == EINVAL || errno == ERANGE) goto failed;
+					}
+					(cells->c + cells->count)->type = CELL_STR;
+					cells->count++;
+					continue;
+					break;
+				}
+				default:
+				break;
+				}
+			}
+			(cells->c + cells->count)->type = CELL_EMPTY;
 		}	
-
-
 	}
 
+	free(file_content);
 	return 0;
+failed:
+	if(cells->c) free(cells->c);
+	free(file_content);
+	return -1;
 }
 
 int get_formats_number(char *file_path,struct Formats *fn, struct Xfs *xfs)
