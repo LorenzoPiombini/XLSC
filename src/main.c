@@ -29,7 +29,8 @@ int main()
 	printf("found %d xf records\n",xfs.count);
 
 	struct Cells cells = {0};
-	get_sheet_cell("../d.test/xl_worksheets_sheet1.xml",&cells,&xfs);
+	get_sheet_cell("../d.test/xl_worksheets_sheet1.xml",&cells,&xfs,&a);
+
 
 	
 	for(int i = 0; i < cells.count;i++){
@@ -38,7 +39,8 @@ int main()
 		printf("cell '%s', found. ",cells.c[i].ref);
 		switch(cells.c[i].type){
 		case CELL_STR:
-			printf("value is '%s'\n",&a.s[a.index[cells.c[i].value.index_sh_str]]);
+			/*printf("value is '%s'\n",&a.s[a.index[cells.c[i].value.index_sh_str]]);*/
+			printf("value is '%s'\n",cells.c[i].value.s);
 			break;
 		case CELL_DATE:
 			struct tm *date = localtime((time_t*)&cells.c[i].value.date);

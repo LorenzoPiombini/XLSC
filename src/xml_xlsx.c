@@ -5,6 +5,7 @@
 #include "xml_xlsx.h"
 #include "os_operations.h"
 
+static int date_1904 = 0;
 static const struct Format built_in_formats[] = {
     { 0, "General",		0},
     { 1, "0",			0},
@@ -38,6 +39,7 @@ static const struct Format built_in_formats[] = {
 
 #define BUILT_IN_FORMAT_SIZE (sizeof(built_in_formats) / sizeof(struct Format))
 
+static int set_date_property(char *file_path,int *date_par);
 static const struct Format *get_built_in_formats(int id);
 static char *strstrnnt(const char *str, const char *find, size_t size, size_t *cursor);
 static int is_number_date(int id);
@@ -198,7 +200,7 @@ failed:
 	return -1;
 }
 
-int get_sheet_cell(char *file_path,struct Cells *cells,struct Xfs *styles)
+int get_sheet_cell(char *file_path,struct Cells *cells,struct Xfs *styles,struct shared_string *shs)
 {
 	uint8_t *file_content = NULL; 
 	long long size = read_file(file_path,&file_content);
@@ -284,7 +286,10 @@ int get_sheet_cell(char *file_path,struct Cells *cells,struct Xfs *styles)
 						case 's':
 						{
 							errno = 0;
+							/*
 							(cells->c + cells->count)->value.index_sh_str = (int)strtol(digits,NULL,10);
+							*/
+							(cells->c + cells->count)->value.s = &shs->s[shs->index[(int)strtol(digits,NULL,10)]];
 							if (errno == EINVAL || errno == ERANGE) goto failed;
 
 							(cells->c + cells->count)->type = CELL_STR;

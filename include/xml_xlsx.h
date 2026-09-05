@@ -2,19 +2,11 @@
 #define _XML_XLSX_H
 
 #include <stdint.h>
-enum Cell_type{
-	CELL_EMPTY,
-	CELL_NUM,
-	CELL_DATE,
-	CELL_BOOL,
-	CELL_STR,
-	CELL_LINE_STR
-};
-
 enum Format_type{
 	FNUM_GENERAL			= 0,
 	FNUM_INT 				= 1,
-	FNUM_FLOAT 				= 2, FNUM_INT_SEP			= 3,
+	FNUM_FLOAT 				= 2, 
+	FNUM_INT_SEP			= 3,
 	FNUM_FLOAT_SEP 			= 4,
 	FNUM_INT_PERC 			= 9, 	/* 0% */
 	FNUM_FLOAT_PERC 		= 10, 	/* 0.00% */
@@ -68,19 +60,43 @@ struct shared_string{
 	size_t count;
 };
 
+enum Cell_type{
+	CELL_EMPTY,
+	CELL_NUM,
+	CELL_FLOAT,
+	CELL_DATE,
+	CELL_BOOL,
+	CELL_STR,
+	CELL_LINE_STR
+};
+
 struct Cell{
+	char ref[12];
 	int type;
 	union{
 		char *s;
-		uint32_t date;
 		long num;
 		double d;
+		long date;
+		int index_sh_str;
 	}value;
-	struct Format value_format;
 };
 
+struct Cells{
+	struct Cell *c;
+	int count;
+};
+
+struct Sheet{
+	char *name;
+	uint8_t hidden;
+	struct Cells cells;
+};
+
+struct Workbook{};
+
 int get_shared_strings(char *file_path,struct shared_string *shs);
-int get_sheet_cell(char *file_path,struct Cell *c);
+int get_sheet_cell(char *file_path,struct Cells *c,struct Xfs *styles,struct shared_string *s);
 int get_formats_number(char *file_path,struct Formats *fn, struct Xfs *xfs);
 
 #endif
