@@ -44,6 +44,12 @@ int main()
 			struct tm *date = localtime((time_t*)&cells.c[i].value.date);
 			printf("value is '%d/%d'\n",date->tm_mon+1,date->tm_mday);
 			break;
+		case CELL_NUM:
+			printf("value is '%ld'\n",cells.c[i].value.num);
+			break;
+		case CELL_FLOAT:
+			printf("value is '%2.f'\n",cells.c[i].value.d);
+			break;
 		default:
 			printf("\n");
 		}

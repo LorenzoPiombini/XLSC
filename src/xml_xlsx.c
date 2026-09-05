@@ -222,6 +222,9 @@ int get_sheet_cell(char *file_path,struct Cells *cells,struct Xfs *styles)
 
 			char *p = cell;
 			while(*p != '>') p++; 
+
+			if(*(p - 1) == '/')continue; /*cell is empty, skip it*/
+
 			int sz = p - cell;
 			char buf[sz+1];
 			memset(buf,0,sz+1);
@@ -255,57 +258,76 @@ int get_sheet_cell(char *file_path,struct Cells *cells,struct Xfs *styles)
 				if(index >= styles->count) goto failed; 
 
 				struct Xf style = styles->xfs[index];
-				if(style.is_date){
-					char *v = strstrnnt((const char*)file_content,"<v>",size,&cur);
-					if(v){
-						*v = '\0';
-						v += 3;
-						int k = 0;
-						char *p = v;
-						for(k = 0; *p != '<'; k++,p++);
-						memset(digits,0,11);
-						strncpy(digits,v,k);
-						
+				char *v = strstrnnt((const char*)file_content,"<v>",size,&cur);
+				if(v){
+					*v = '\0';
+					v += 3;
+					int k = 0;
+					char *p = v;
+					for(k = 0; *p != '<'; k++,p++);
+					memset(digits,0,11);
+					strncpy(digits,v,k);
+
+
+					char *t = NULL;
+					if(style.is_date){
 						errno = 0;
-						int date = (int)strtol(digits,NULL,10);
+						int number = (int)strtol(digits,NULL,10);
 						if (errno == EINVAL || errno == ERANGE) goto failed;
 
-						(cells->c + cells->count)->value.date = convert_excel_time_to_c_system(date);
+						(cells->c + cells->count)->value.date = convert_excel_time_to_c_system(number);
 						(cells->c + cells->count)->type = CELL_DATE;
-						cells->count++;
+					}else if((t = strstrnnt((const char*)buf,"t=",sz, NULL))){
+						*t = '\0';
+						t += 3;
+						switch(*t){
+						case 's':
+						{
+							errno = 0;
+							(cells->c + cells->count)->value.index_sh_str = (int)strtol(digits,NULL,10);
+							if (errno == EINVAL || errno == ERANGE) goto failed;
+
+							(cells->c + cells->count)->type = CELL_STR;
+							cells->count++;
+							continue;
+							break;
+						}
+						default:
+						break;
+						}
+					}else{
+						switch(style.num_fmt_id){
+						case FNUM_GENERAL:
+						case FNUM_INT:			
+						case FNUM_INT_SEP:
+						{
+							errno = 0;
+							int number = (int)strtol(digits,NULL,10);
+							if (errno == EINVAL || errno == ERANGE) goto failed;
+
+							(cells->c + cells->count)->value.num = number;
+							(cells->c + cells->count)->type = CELL_NUM;
+							break;
+						}
+						case FNUM_FLOAT:
+						case FNUM_FLOAT_SEP:
+						{
+							errno = 0;
+							double number = strtod(digits,NULL);
+							if (errno == EINVAL || errno == ERANGE) goto failed;
+
+							(cells->c + cells->count)->value.d = number;
+							(cells->c + cells->count)->type = CELL_FLOAT;
+							break;
+
+						}
+						default:
 						continue;
+						break;
+						}
 					}
-				}
-			}
-			/*get the type of the data in the cell*/
-			char *t = strstrnnt((const char*)buf,"t=",sz, NULL);
-			if(t){
-				*t = '\0';
-				t += 3;
-				switch(*t){
-				case 's':
-				{
-					char *v = strstrnnt((const char*)file_content,"<v>",size,&cur);
-					if(v){
-						*v = '\0';
-						v += 3;
-						int k = 0;
-						char *p = v;
-						for(k = 0; *p != '<'; k++,p++);
-						memset(digits,0,11);
-						strncpy(digits,v,k);
-						
-						errno = 0;
-						(cells->c + cells->count)->value.index_sh_str = (int)strtol(digits,NULL,10);
-						if (errno == EINVAL || errno == ERANGE) goto failed;
-					}
-					(cells->c + cells->count)->type = CELL_STR;
 					cells->count++;
 					continue;
-					break;
-				}
-				default:
-				break;
 				}
 			}
 			(cells->c + cells->count)->type = CELL_EMPTY;
@@ -362,7 +384,7 @@ int get_formats_number(char *file_path,struct Formats *fn, struct Xfs *xfs)
 
 		char *end_id = num_fmts;
 		while(*end_id != '"') end_id++;
-		
+
 		int s = (end_id - (char*)file_content) - (num_fmts - (char *) file_content);
 		memset(digits,0,11);
 		strncpy(digits,num_fmts,s);
@@ -372,7 +394,7 @@ int get_formats_number(char *file_path,struct Formats *fn, struct Xfs *xfs)
 		if (errno == EINVAL || errno == ERANGE) goto failed;
 
 		fn->f[i].type = (int)number;
-	
+
 		num_fmts = strstrnnt((const char*)file_content,"formatCode",size,&cursor);
 		if(!num_fmts) goto failed;
 
@@ -400,7 +422,7 @@ get_xfs:
 	memset(digits,0,11);
 	int n_d = (c_end - (char *)file_content) - (c - (char *) file_content);
 	strncpy(digits,c,n_d);
-	
+
 	errno = 0;
 	long xfs_record_n = strtol(digits,NULL,10);
 	if (errno == EINVAL || errno == ERANGE) goto failed;
@@ -437,7 +459,7 @@ get_xfs:
 					(xfs->xfs + j)->is_date = fn->f[k].is_date; 
 				}
 			}else{
-					(xfs->xfs + j)->is_date = is_number_date((xfs->xfs + j)->num_fmt_id); 
+				(xfs->xfs + j)->is_date = is_number_date((xfs->xfs + j)->num_fmt_id); 
 
 			}
 			j++;
