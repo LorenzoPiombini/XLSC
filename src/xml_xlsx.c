@@ -3,6 +3,12 @@
 #include <errno.h>
 #include "xml_xlsx.h"
 #include "os_operations.h"
+#include "lz77.h"
+
+static struct shared_string ref_to_sh = {0};
+static struct Formats ref_to_fm = {0};
+static struct Xfs ref_to_xfs = {0};
+static struct Cells ref_to_cells = {0};
 
 static int date_1904 = 0;
 static const struct Format built_in_formats[] = {
@@ -462,4 +468,75 @@ failed:
 	if(fn->f) free(fn->f);
 	if(xfs) if(xfs->xfs) free(xfs->xfs);
 	return -1;
+}
+
+
+
+int open_WorkBook(char *file_name, struct Cells *c)
+{
+	long long size = 0;
+	uint8_t *file_content = NULL; 
+	struct F_unzip data  = {0};
+	struct shared_string a = {0};
+	struct Formats fn = {0};
+	struct Xfs xfs = {0};
+	struct Cells cells = {0};
+
+	if((size = read_file(file_name,&file_content)) == -1) return -1;
+	if(unZIP(file_content,size,&data) == -1) return -1;
+
+	uint8_t *fl = NULL;
+	long long s = 0;
+	if((s = browse_extracted_ZIP("xl/sharedStrings.xml",&data,&fl)) == -1){
+		free(data.data);
+		return 0;
+	}
+
+	if(get_shared_strings(fl,s,&a) == -1) goto clean;
+
+	ref_to_sh.s = a.s;
+	ref_to_sh.index = a.index;
+
+	free(fl);
+	fl = NULL;
+
+	if((s = browse_extracted_ZIP("xl/styles.xml",&data,&fl)) == -1) goto clean;
+
+	if(get_formats_number(fl,s,&fn,&xfs) == -1) goto clean;
+	free(fl);
+
+	ref_to_xfs = xfs;
+	ref_to_fm = fn; 
+
+	fl = NULL;
+	if((s = browse_extracted_ZIP("xl/worksheets/sheet1.xml",&data,&fl)) == -1) goto clean;
+
+	get_sheet_cell(fl,s,&cells,&xfs,&a);
+	free(fl);
+	ref_to_cells = cells;
+	c->c = cells.c;
+	c->count = cells.count;
+	
+	free(file_content);
+	free(data.data);
+	return 0;
+
+clean:
+	free(file_content);
+	if(data.data) free(data.data);
+	if(cells.c) free(cells.c);
+	if(fn.f) free(fn.f);
+	if(xfs.xfs) free(xfs.xfs);
+	if(a.s) free(a.s);
+	if(a.index) free(a.index);
+	return -1;
+}
+
+void close_WorkBook(void)
+{
+	free(ref_to_cells.c);
+	free(ref_to_fm.f);
+	free(ref_to_xfs.xfs);
+	free(ref_to_sh.s);
+	free(ref_to_sh.index);
 }
