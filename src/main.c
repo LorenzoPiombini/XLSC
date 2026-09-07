@@ -12,6 +12,7 @@
 int main(int argc,char **argv)
 {
 	if(argc <= 1) return -1;
+
 	struct Cells cells = {0};
 	if(open_WorkBook(argv[1],&cells) == -1){
 		fprintf(stderr,"cannot open workbook '%s'.\n",argv[1]);
@@ -45,5 +46,4 @@ int main(int argc,char **argv)
 	printf("found %d cells\n",cells.count);
 	close_WorkBook();
 	return 0;
-
 }

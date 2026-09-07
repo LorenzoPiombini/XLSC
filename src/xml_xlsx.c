@@ -206,9 +206,32 @@ int get_sheet_cell(uint8_t *file_content,uint64_t size,struct Cells *cells,struc
 	size_t cursor = 0;
 	char *row = NULL;
 
-	cells->c = malloc(12*47*sizeof *cells->c);
+	/*get dimensions*/
+	char *dimensions = strstrnnt((const char*)file_content,"<dimension",size,&cursor);
+	if(!dimensions) return -1;
+
+	while(*dimensions != '"') dimensions++;
+	dimensions++;
+
+	char begin = *dimensions;
+
+	while(*dimensions != ':') dimensions++;
+	dimensions++;
+
+	char end = *dimensions++; 
+	char *p = dimensions;
+	int i = 0;
+	for(; *p != '"'; digits[i++] = *p++);
+
+	errno = 0; 
+	int rows = (int)strtol(digits,NULL,10);
+	if (errno == EINVAL || errno == ERANGE) return -1;
+
+	int cols = (int)(end -begin) + 1;
+
+	cells->c = malloc(cols * rows *sizeof *cells->c);
 	if(!cells->c) goto failed;
-	memset(cells->c,0,12*47*sizeof *cells->c);
+	memset(cells->c,0,cols*rows*sizeof *cells->c);
 
 	while((row = strstrnnt((const char*)file_content,"<row ",size,&cursor))){
 		*row = '\0';
