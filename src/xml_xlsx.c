@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -125,12 +124,8 @@ static const struct Format *get_built_in_formats(int id)
 	return NULL;
 }
 
-int get_shared_strings(char *file_path,struct shared_string *shs)
+int get_shared_strings(uint8_t *file_content, uint64_t size,struct shared_string *shs)
 {
-	uint8_t *file_content = NULL; 
-	long long size = read_file(file_path,&file_content);
-	if(size == -1) return -1;
-
 	char digits[11] = {0};
 	char *shared_string = NULL;
 	
@@ -138,10 +133,10 @@ int get_shared_strings(char *file_path,struct shared_string *shs)
 	char *count = strstrnnt((const char*)file_content,"uniqueCount",size,&cursor);
 	if(!count) goto failed;
 
-	while((count - (char*)file_content) < size && *count != '"') count++;
+	while((uint64_t)(count - (char*)file_content) < size && *count != '"') count++;
 	count++;
 	char *end = count;
-	while((end - (char*)file_content) < size && *end != '"') end++;
+	while((uint64_t)(end - (char*)file_content) < size && *end != '"') end++;
 	int dig_len = (end - (char*)file_content) - (count - (char *)file_content);
 	strncpy(digits,count,dig_len);
 
@@ -190,21 +185,16 @@ int get_shared_strings(char *file_path,struct shared_string *shs)
 	shs->index = offset;
 	shs->count = scount;
 
-	free(file_content);
 	return 0;
 
 failed:
-	if(file_content) 	free(file_content);
 	if(shared_string) 	free(shared_string);
 	if(offset) 			free(offset);
 	return -1;
 }
 
-int get_sheet_cell(char *file_path,struct Cells *cells,struct Xfs *styles,struct shared_string *shs)
+int get_sheet_cell(uint8_t *file_content,uint64_t size,struct Cells *cells,struct Xfs *styles,struct shared_string *shs)
 {
-	uint8_t *file_content = NULL; 
-	long long size = read_file(file_path,&file_content);
-	if(size == -1) return -1;
 	
 	char digits[11] = {0};
 	size_t cursor = 0;
@@ -339,19 +329,14 @@ int get_sheet_cell(char *file_path,struct Cells *cells,struct Xfs *styles,struct
 		}	
 	}
 
-	free(file_content);
 	return 0;
 failed:
 	if(cells->c) free(cells->c);
-	free(file_content);
 	return -1;
 }
 
-int get_formats_number(char *file_path,struct Formats *fn, struct Xfs *xfs)
+int get_formats_number(uint8_t *file_content,uint64_t size,struct Formats *fn, struct Xfs *xfs)
 {
-	uint8_t *file_content = NULL; 
-	long long size = read_file(file_path,&file_content);
-	if(size == -1) return -1;
 
 	/*get count of custom number format*/
 
@@ -364,7 +349,7 @@ int get_formats_number(char *file_path,struct Formats *fn, struct Xfs *xfs)
 	num_fmts++;
 
 	char *end = num_fmts;
-	while(((end - (char*)file_content) < size) && *end != '"') end++;
+	while(((uint64_t)(end - (char*)file_content) < size) && *end != '"') end++;
 	int dig_len = (end - (char*)file_content) - (num_fmts - (char *)file_content);
 	strncpy(digits,num_fmts,dig_len);
 
@@ -471,13 +456,10 @@ get_xfs:
 		}
 	}
 
-
-	free(file_content);
 	return 0;
 
 failed:
 	if(fn->f) free(fn->f);
 	if(xfs) if(xfs->xfs) free(xfs->xfs);
-	free(file_content);
 	return -1;
 }

@@ -1,38 +1,56 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <errno.h>
 #include <time.h>
+#include "lz77.h"
 #include "xml_xlsx.h"
 #include "os_operations.h"
 
 
 
-int main()
+int main(int argc,char **argv)
 {
+	if(argc <= 1) return -1;
+	long long size = 0;
+	uint8_t *file_content = NULL; 
+	struct F_unzip data  = {0};
 	struct shared_string a = {0};
-	if(get_shared_strings("../d.test/xl_sharedStrings.xml",&a) == -1) goto clean;
-
-	for(long i = 0; i < (long)a.count; i++)
-		printf("[%s]\n",&a.s[a.index[i]]);
-
-	printf("found %ld strings\n",a.count);
-
-
 	struct Formats fn = {0};
 	struct Xfs xfs = {0};
-	if(get_formats_number("../d.test/xl_styles.xml",&fn,&xfs) == -1) goto clean;
-
-	for(int i = 0; i < xfs.count; i++){
-		printf("numFmtId=%d, is_date? %s.\n",xfs.xfs[i].num_fmt_id,xfs.xfs[i].is_date ? "yes":"no");
-	}
-	printf("found %d xf records\n",xfs.count);
-
 	struct Cells cells = {0};
-	get_sheet_cell("../d.test/xl_worksheets_sheet1.xml",&cells,&xfs,&a);
 
+	if((size = read_file(argv[1],&file_content)) == -1) return -1;
+	if(unZIP(file_content,size,&data) == -1) return -1;
 
-	
+	uint8_t *fl = NULL;
+	long long s = 0;
+	if((s = browse_extracted_ZIP("xl/sharedStrings.xml",&data,&fl)) == -1){
+		free(data.data);
+		return 0;
+	}
+
+	if(get_shared_strings(fl,s,&a) == -1) goto clean;
+
+	printf("found %ld strings\n",a.count);
+	free(fl);
+	fl = NULL;
+
+	s = 0;
+	if((s = browse_extracted_ZIP("xl/styles.xml",&data,&fl)) == -1) goto clean;
+
+	if(get_formats_number(fl,s,&fn,&xfs) == -1) goto clean;
+
+	printf("found %d xf records\n",xfs.count);
+	free(fl);
+
+	fl = NULL;
+	s = 0;
+	if((s = browse_extracted_ZIP("xl/worksheets/sheet1.xml",&data,&fl)) == -1) goto clean;
+
+	get_sheet_cell(fl,s,&cells,&xfs,&a);
+
 	for(int i = 0; i < cells.count;i++){
 		if(cells.c[i].type == CELL_EMPTY) continue;
 
@@ -57,9 +75,11 @@ int main()
 		}
 	}
 	printf("found %d cells\n",cells.count);
+	free(fl);
 	
 clean:
-
+	free(file_content);
+	if(data.data) free(data.data);
 	if(cells.c) free(cells.c);
 	if(fn.f) free(fn.f);
 	if(xfs.xfs) free(xfs.xfs);

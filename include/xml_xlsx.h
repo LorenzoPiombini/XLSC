@@ -95,8 +95,8 @@ struct Sheet{
 
 struct Workbook{};
 
-int get_shared_strings(char *file_path,struct shared_string *shs);
-int get_sheet_cell(char *file_path,struct Cells *c,struct Xfs *styles,struct shared_string *s);
-int get_formats_number(char *file_path,struct Formats *fn, struct Xfs *xfs);
+int get_shared_strings(uint8_t *file_content, uint64_t size,struct shared_string *shs);
+int get_sheet_cell(uint8_t *file_content,uint64_t size,struct Cells *c,struct Xfs *styles,struct shared_string *s);
+int get_formats_number(uint8_t *file_content,uint64_t size,struct Formats *fn, struct Xfs *xfs);
 
 #endif
